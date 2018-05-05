@@ -107,6 +107,8 @@ class ControlsFlyer(UnityDrone):
                 (self.position_trajectory,
                  self.time_trajectory,
                  self.yaw_trajectory) = self.load_test_trajectory(time_mult=0.5)
+                for i in self.time_trajectory:
+                    print('self.time_trajectory:'.format(i))
                 self.all_waypoints = self.position_trajectory.copy()
                 self.waypoint_number = -1
                 self.waypoint_transition()
@@ -156,7 +158,7 @@ class ControlsFlyer(UnityDrone):
         self.flight_state = States.TAKEOFF
 
     def waypoint_transition(self):
-        print("waypoint transition")
+        # print("waypoint transition")
         self.waypoint_number = self.waypoint_number + 1
         self.target_position = self.all_waypoints.pop(0)
         self.flight_state = States.WAYPOINT
