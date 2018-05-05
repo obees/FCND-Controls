@@ -57,3 +57,22 @@ Comme la techno, la data fait partie de l'ADN des apps qui permet de fluidifier 
 
 Piloiter l'ensemble de ses activités et inrecations avec son ecoysteme avec des apps digitals et d'optimiser la valeur business de ces apps par la data (data-driven / ai driven) .
 En mode agile, comme la technologie, la data fait partie du produit (par le biais d'indicateurs de décision) ce qui fluidifie les itérations de création de valeur produit.
+
+
+Here are my gains, do they look about the right magnitude?
+
+# Position control gains
+kpPosXY = 34.7
+kpPosZ  = 32
+KiPosZ  = 19
+
+# Velocity control gains
+kpVelXY = 14.4
+kpVelZ  = 8
+
+# Angle control gains
+kpBank  = 10.5
+kpYaw   = 2.9
+
+# Angle rate gains
+kpPQR  = 80,80,1.3
