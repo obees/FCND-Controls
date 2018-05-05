@@ -98,19 +98,27 @@ class NonlinearController(object):
 
         Returns: desired vehicle 2D acceleration in the local frame [north, east]
         """
+
+        # PD controller
+
+        # extract x-north axis variables from parameters
         x_north_cmd = local_position_cmd[0]
         x_north = local_position[0]
         x_dot_north_cmd = local_velocity_cmd[0]
         x_dot_north = local_velocity[0]
         x_dot_dot_north_ff = acceleration_ff[0]
 
+        # extract y-east axis variables from parameters
         y_east_cmd = local_position_cmd[1]
         y_east = local_position[1]
         y_dot_east_cmd = local_velocity_cmd[1]
         y_dot_east = local_velocity[1]
         y_dot_dot_east_ff = acceleration_ff[1]
 
+        # PD controller formula to calculate desirednorth acceleration in local frame
         acc_north_cmd = self.x_k_p * (x_north_cmd - x_north) + self.x_k_d * (x_dot_north_cmd - x_dot_north) + x_dot_dot_north_ff
+
+        # PD controller formula to calculate desired east acceleration in local frame
         acc_east_cmd = self.y_k_p * (y_east_cmd - y_east) + self.y_k_d * (y_dot_east_cmd - y_dot_east) + y_dot_dot_east_ff
 
         return np.array([acc_north_cmd, acc_east_cmd])
@@ -123,22 +131,28 @@ class NonlinearController(object):
             vertical_velocity_cmd: desired vertical velocity (+up)
             altitude: vehicle vertical position (+up)
             vertical_velocity: vehicle vertical velocity (+up)
+            attitude: the vehicle's current attitude, 3 element numpy array (roll, pitch, yaw) in radians
             acceleration_ff: feedforward acceleration command (+up)
 
         Returns: thrust command for the vehicle (+up)
         """
 
+        # Extract roll, pitch, yaw variables from attitude parameter
         [roll, pitch, yaw] = attitude
+
+        # calculate rotation matrix from roll pitch yaw
         rot_mat = euler2RM(roll, pitch, yaw)
 
+        # desired vertical acceleration in inertial frame is given by the following PD controller formula
         u_1_bar = self.z_k_p * (altitude_cmd - altitude) + self.z_k_d * (vertical_velocity_cmd - vertical_velocity) + acceleration_ff
 
-        c = (u_1_bar - 9.81) / rot_mat[2][2]  # thrust command in m/s^2 in body frame
+        # calculate vertical acceleration in body frame, rot_mat[2][2] is z scaling factor in inertial frame
+        c = (u_1_bar - 9.81) / rot_mat[2][2]
 
-        # F = ma
-        # Si le thrust est en Newton
+        # since thrust is in Newton, from F=ma we need to multiply by drone's mass
         thrust = DRONE_MASS_KG * c
 
+        # ensure thrust stays below the MAX_THRUST limit
         thrust_limited = np.clip(thrust, 0.0, MAX_THRUST)
 
         return thrust_limited  # thrust command in Newton
@@ -148,33 +162,52 @@ class NonlinearController(object):
 
         Args:
             target_acceleration: 2-element numpy array (north_acceleration_cmd,east_acceleration_cmd) in m/s^2
-            attitude: 3-element numpy array (roll,pitch,yaw) in radians
+            attitude: 3-element numpy array (roll, pitch, yaw) in radians
             thrust_cmd: vehicle thruts command in Newton
 
         Returns: 2-element numpy array, desired rollrate (p) and pitchrate (q) commands in radians/s
         """
 
-        [north_acceleration_cmd, east_acceleration_cmd] = acceleration_cmd  # m/s^2 in NED frame
-        [roll, pitch, yaw] = attitude  # radians in NED frame
+        # Extract variable values from parameters
+        [north_acceleration_cmd, east_acceleration_cmd] = acceleration_cmd
+        [roll, pitch, yaw] = attitude
 
-        # thrust_cmd                                                         # m/s^2 in body frame
+        # Avoid division by zero
         if thrust_cmd != 0:
+
+            # Based on equation x_dot_dot = (1/m) * R[1,3] * (-F),
+            # given
+            # x_dot_dot = north_acceleration_cmd
+            # F = thrust_cmd
+            # m = DRONE_MASS_KG
+            # R[1,3] = b_x_c, x scaling factor in inertial frame of the commanded acceleration (DRONE_MASS_KG/thrust_cmd) in body frame
             b_x_c = north_acceleration_cmd / -thrust_cmd * DRONE_MASS_KG
+
+            # Same for b_y_c
             b_y_c = east_acceleration_cmd / -thrust_cmd * DRONE_MASS_KG
         else:
             b_x_c = 0
             b_y_c = 0
 
+        # Rotation matrix To transform between body-frame accelerations and world frame accelerations
         rot_mat = euler2RM(roll, pitch, yaw)
 
+        # x scaling factor in inertial frame from actual attitude
         b_x_a = rot_mat[0][2]
+
+        # y scaling factor in inertial frame from actual attitude
         b_y_a = rot_mat[1][2]
 
+        # rate of change of x scaling factor in inertial frame
         b_x_c_dot = self.k_p_roll * (b_x_c - b_x_a)
+
+        # rate of change of y scaling factor in inertial frame
         b_y_c_dot = self.k_p_pitch * (b_y_c - b_y_a)
 
+        # creation of rate of change vector from its x and y components
         b_dot_vector = np.array([b_x_c_dot, b_y_c_dot]).T
 
+        # sub rotation matrix containing the first 4 cells
         sub_rot_mat = np.zeros([2, 2])
         sub_rot_mat[0][0] = rot_mat[1][0]
         sub_rot_mat[1][0] = rot_mat[1][1]
@@ -184,19 +217,22 @@ class NonlinearController(object):
 
         b_rot = (1 / rot_mat[2][2]) * sub_rot_mat
 
+        # Calculation of p_c and  q_c
         [p_c, q_c] = b_rot.dot(b_dot_vector)
 
+        # making sure we are not going over the roll limits
         if roll > (math.pi / 4) and p_c > 0:
-            p_c = -math.pi
+            p_c = -math.pi/3
 
         elif roll < (-math.pi / 4) and p_c < 0:
-            p_c = math.pi
+            p_c = math.pi/3
 
+        # making sure we are not going over the pitch limits
         if pitch > (math.pi / 4) and q_c > 0:
-            q_c = -math.pi
+            q_c = -math.pi/3
 
         elif pitch < (-math.pi / 4) and q_c < 0:
-            q_c = math.pi
+            q_c = math.pi/3
 
         return np.array([p_c, q_c])
 
@@ -213,10 +249,14 @@ class NonlinearController(object):
         # a proportional controller on body rates to commanded moments
         # kg * m^2 * rad / sec^2 = Newtons*meters
 
+        # Only proportional gain used, no derivative term
         gains = np.array([self.k_p_p, self.k_p_q, self.k_p_r])
 
+        # Calculation is based on Moment = (Moment of Inertia) x (Angular Acceleration)
+        # Angular acceleration  equals (Gain) x (body rate desired - observed)
         [tau_x_c, tau_y_c, tau_z_c] = MOI.T * (gains.T * (body_rate_cmd.T - body_rate.T))
 
+        # Maximum commanded moments are limited to MAX_TORQUE
         tau_x_c_c = np.clip(tau_x_c, -MAX_TORQUE, MAX_TORQUE)
         tau_y_c_c = np.clip(tau_y_c, -MAX_TORQUE, MAX_TORQUE)
         tau_z_c_c = np.clip(tau_z_c, -MAX_TORQUE, MAX_TORQUE)
@@ -232,15 +272,22 @@ class NonlinearController(object):
 
         Returns: target yawrate in radians/sec
         """
+        # proportional controller
 
+        # calculate yaw delta between commanded and observed yaw values
         yaw_delta = yaw_cmd - yaw
+
+        # create new yaw delta variable to store temp values
         yaw_delta_2 = yaw_delta
+
+        # Ensure you always pick the shortest angle towards commanded yaw from observed yaw
         if abs(yaw_delta) > (math.pi):
             if yaw_delta < 0:
                 yaw_delta_2 = (2 * math.pi) + yaw_delta
             else:
                 yaw_delta_2 = yaw_delta - (2 * math.pi)
 
+        # Calculate yaw rate with the proportional yaw constant
         yawrate = self.k_p_yaw * (yaw_delta_2)
 
         return yawrate

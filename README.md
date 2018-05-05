@@ -34,7 +34,7 @@ source activate fcnd
 Then run the update:
 
 ```sh
-pip install udacidrone --upgrade
+pip install -U git+https://github.com/udacity/udacidrone.git
 ```
 
 
@@ -110,7 +110,7 @@ def bodyrate_controller(self):
 
 ### Step 4
 
-Register and add callbacks for the `RAW_GYROSCOPE`, `ATTITUDE`, and `LOCAL_VELOCITY` messages. Call the appropriate level of control in each callback (i.e. `bodyrate_controller()` is called in `gyro_callback()`):
+Register and add callbacks for the `RAW_GYROSCOPE`, `ATTITUDE`, and `LOCAL_VELOCITY` messages.  Note that you may already have the `velocity_callback()` function implemented; if so, replace `velocity_callback()` with the callback below. Call the appropriate level of control in each callback (i.e. `bodyrate_controller()` is called in `gyro_callback()`):
 
 ```py
 def __init___(self,connection):
@@ -225,7 +225,7 @@ The minimum requirements for a successful submission include completing the foll
  - `body_rate_control()` - a proportional controller on body rates to commanded moments
  - `altitude_control()` - an altitude controller that uses both the down position and the down velocity to command thrust.  Note that you will need to include the non-linear effects from non-zero roll/pitch angles!
  - `yaw_control()` - a linear/proportional heading controller to yaw rate commands (non-linear transformation not required)
- - `roll_pitch_control()` - a reduced attitude controller taking in local acceleration or attitude commands and outputs body rate command.  Note that you will need to account for the non-linear transformation from local accelerations to body rates!
+ - `roll_pitch_control()` - a reduced attitude controller taking in local acceleration commands and outputs body rate command.  Note that you will need to account for the non-linear transformation from local accelerations to body rates!
  - `lateral_position_control()` - a linear position controller using the local north/east position and local north/east velocity to generate a commanded local acceleration
  - The final moment/thrust commands limit the input at given saturation limits
 
